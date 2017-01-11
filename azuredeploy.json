@@ -1,0 +1,397 @@
+﻿{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+  "parameters": {
+    "VMStorageType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_RAGRS",
+        "Premium_LRS"
+      ]
+    },
+    "WebVMName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "armweb"
+    },
+    "WebVMAdminUserName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "demouser"
+    },
+    "WebVMAdminPassword": {
+      "type": "securestring"
+    },
+    "WebVMWindowsOSVersion": {
+      "type": "string",
+      "defaultValue": "2012-R2-Datacenter",
+      "allowedValues": [
+        "2008-R2-SP1",
+        "2012-Datacenter",
+        "2012-R2-Datacenter",
+        "Windows-Server-Technical-Preview"
+      ]
+    },
+    "WebPublicIPDnsName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "WebPackage": {
+      "type": "string",
+      "defaultValue": "http://opsgilitytraining.blob.core.windows.net/samples/cloudshop.zip"
+    },
+    "WebDSCZip": {
+      "type": "string",
+      "defaultValue": "https://opsgilityweb.blob.core.windows.net/public/WebConfig.zip"
+    },
+    "SQLDSCZip": {
+      "type": "string",
+      "defaultValue": "https://opsgilityweb.blob.core.windows.net/public/SQLConfig.zip"
+    },
+    "SQLVMName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "armsql"
+    },
+    "SQLVMAdminUserName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "demouser"
+    },
+    "SQLVMAdminPassword": {
+      "type": "securestring"
+    },
+    "SQLVMSKU": {
+      "type": "string",
+      "defaultValue": "Web",
+      "allowedValues": [
+        "Web",
+        "Standard",
+        "Enterprise"
+      ]
+    },
+    "vmSizeSql": {
+      "type": "string",
+      "defaultValue": "Standard_D2",
+      "allowedValues": [
+        "Standard_D2",
+        "Standard_D3",
+        "Standard_D4",
+        "Standard_D5"
+      ]
+    }
+
+
+
+  },
+  "variables": {
+    "OPSTrainingVNETPrefix": "10.0.0.0/16",
+    "OPSTrainingVNETSubnet1Name": "FrontEndNetwork",
+    "OPSTrainingVNETSubnet1Prefix": "10.0.0.0/24",
+    "OPSTrainingVNETSubnet2Name": "BackEndNetwork",
+    "OPSTrainingVNETSubnet2Prefix": "10.0.1.0/24",
+    "VMStorageName": "[concat('vmstorage', uniqueString(resourceGroup().id))]",
+    "WebVMImagePublisher": "MicrosoftWindowsServer",
+    "WebVMImageOffer": "WindowsServer",
+    "WebVMOSDiskName": "WebVMOSDisk",
+    "WebVMVmSize": "Standard_D1",
+    "WebVMVnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'OPSTrainingVNET')]",
+    "WebVMSubnetRef": "[concat(variables('WebVMVnetID'), '/subnets/', variables('OPSTrainingVNETSubnet1Name'))]",
+    "WebVMStorageAccountContainerName": "vhds",
+    "WebVMNicName": "[concat(parameters('WebVMName'), 'NetworkInterface')]",
+    "WebPublicIPName": "WebPublicIP",
+    "WebDSCConfigurationFunction": "web-dsc-config.ps1\\Main",
+    "SQLVMImagePublisher": "MicrosoftSQLServer",
+    "SQLVMImageOffer": "SQL2014SP1-WS2012R2",
+    "SQLVMOSDiskName": "SQLVMOSDisk",
+    "SQLVMVmSize": "Standard_D1",
+    "SQLVMVnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'OPSTrainingVNET')]",
+    "SQLVMSubnetRef": "[concat(variables('SQLVMVnetID'), '/subnets/', variables('OPSTrainingVNETSubnet2Name'))]",
+    "SQLVMStorageAccountContainerName": "vhds",
+    "SQLVMNicName": "[concat(parameters('SQLVMName'), 'NetworkInterface')]",
+    "SQLDISK1": "[concat('http://',variables('VMStorageName'),'.blob.core.windows.net/','vhds','/','dataDisk1.vhd')]",
+    "SQLDISK2": "[concat('http://',variables('VMStorageName'),'.blob.core.windows.net/','vhds','/','dataDisk2.vhd')]",
+    "SQLDSCConfigurationFunction": "sql-dsc-config.ps1\\Main"
+  },
+    "resources": [
+        {
+            "name": "OPSTrainingVNET",
+            "type": "Microsoft.Network/virtualNetworks",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-05-01-preview",
+            "dependsOn": [ ],
+            "tags": {
+                "displayName": "OPSTrainingVNET"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('OPSTrainingVNETPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('OPSTrainingVNETSubnet1Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('OPSTrainingVNETSubnet1Prefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('OPSTrainingVNETSubnet2Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('OPSTrainingVNETSubnet2Prefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[variables('VMStorageName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [ ],
+            "tags": {
+                "displayName": "VMStorage"
+            },
+            "properties": {
+                "accountType": "[parameters('VMStorageType')]"
+            }
+        },
+        {
+            "name": "[variables('WebVMNicName')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-05-01-preview",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', 'OPSTrainingVNET')]",
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('WebPublicIPName'))]"
+            ],
+            "tags": {
+                "displayName": "WebVMNic"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('WebVMSubnetRef')]"
+                            },
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('WebPublicIPName'))]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[parameters('WebVMName')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-05-01-preview",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('VMStorageName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('WebVMNicName'))]"
+            ],
+            "tags": {
+                "displayName": "WebVM"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('WebVMVmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('WebVMName')]",
+                    "adminUsername": "[parameters('WebVMAdminUsername')]",
+                    "adminPassword": "[parameters('WebVMAdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('WebVMImagePublisher')]",
+                        "offer": "[variables('WebVMImageOffer')]",
+                        "sku": "[parameters('WebVMWindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "WebVMOSDisk",
+                        "vhd": {
+                            "uri": "[concat('http://', variables('VMStorageName'), '.blob.core.windows.net/', variables('WebVMStorageAccountContainerName'), '/', variables('WebVMOSDiskName'), '.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('WebVMNicName'))]"
+                        }
+                    ]
+                }
+            },
+            "resources": [
+                {
+                    "name": "WebDSC",
+                    "type": "extensions",
+                    "location": "[resourceGroup().location]",
+                    "apiVersion": "2015-06-15",
+                  "dependsOn": [
+                    "[concat('Microsoft.Compute/virtualMachines/', parameters('WebVMName'))]",
+                    "[concat('Microsoft.Compute/virtualMachines/', parameters('SQLVMName'),'/extensions/SQLDSC')]"
+                  ],
+                    "tags": {
+                        "displayName": "WebDSC"
+                    },
+                    "properties": {
+                        "publisher": "Microsoft.Powershell",
+                        "type": "DSC",
+                        "typeHandlerVersion": "2.9",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": {
+                            "modulesUrl": "[parameters('WebDSCZip')]",
+                            "configurationFunction": "[variables('WebDSCConfigurationFunction')]",
+                         },
+                        "protectedSettings": { }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "[variables('WebPublicIPName')]",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-05-01-preview",
+            "dependsOn": [ ],
+            "tags": {
+                "displayName": "WebPublicIP"
+            },
+            "properties": {
+                "publicIPAllocationMethod": "Dynamic",
+                "dnsSettings": {
+                    "domainNameLabel": "[parameters('WebPublicIPDnsName')]"
+                }
+            }
+        },
+        {
+            "name": "[variables('SQLVMNicName')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-05-01-preview",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', 'OPSTrainingVNET')]"
+            ],
+            "tags": {
+                "displayName": "SQLVMNic"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('SQLVMSubnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[parameters('SQLVMName')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-05-01-preview",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('VMStorageName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('SQLVMNicName'))]"
+            ],
+            "tags": {
+                "displayName": "SQLVM"
+            },
+            "properties": {
+              "hardwareProfile": {
+                    "vmSize": "[parameters('vmSizeSQL')]"
+              },
+                "osProfile": {
+                    "computerName": "[parameters('SQLVMName')]",
+                    "adminUsername": "[parameters('SQLVMAdminUsername')]",
+                    "adminPassword": "[parameters('SQLVMAdminPassword')]"
+                },
+              "storageProfile": {
+                "imageReference": {
+                  "publisher": "[variables('SQLVMImagePublisher')]",
+                  "offer": "[variables('SQLVMImageOffer')]",
+                  "sku": "[parameters('SQLVMSKU')]",
+                  "version": "latest"
+                },
+                "osDisk": {
+                  "name": "SQLVMOSDisk",
+                  "vhd": {
+                    "uri": "[concat('http://', variables('VMStorageName'), '.blob.core.windows.net/', variables('SQLVMStorageAccountContainerName'), '/', variables('SQLVMOSDiskName'), '.vhd')]"
+                  },
+                  "caching": "ReadWrite",
+                  "createOption": "FromImage"
+                },
+                "dataDisks": [
+                  {
+                    "name": "datadisk1",
+                    "diskSizeGB": "1023",
+                    "lun": 0,
+                    "vhd": { "uri": "[variables('SQLDISK1')]" },
+                    "createOption": "Empty"
+                  },
+                  {
+                    "name": "datadisk2",
+                    "diskSizeGB": "1023",
+                    "lun": 1,
+                    "vhd": { "uri": "[variables('SQLDISK2')]" },
+                    "createOption": "Empty"
+                  }
+                ]
+
+              },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('SQLVMNicName'))]"
+                        }
+                    ]
+                }
+            },
+            "resources": [
+                {
+                    "name": "SQLDSC",
+                    "type": "extensions",
+                    "location": "[resourceGroup().location]",
+                    "apiVersion": "2015-06-15",
+                    "dependsOn": [
+                        "[concat('Microsoft.Compute/virtualMachines/', parameters('SQLVMName'))]"
+                    ],
+                    "tags": {
+                        "displayName": "SQLDSC"
+                    },
+                    "properties": {
+                        "publisher": "Microsoft.Powershell",
+                        "type": "DSC",
+                        "typeHandlerVersion": "2.9",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": {
+                            "modulesUrl": "[parameters('SQLDSCZip')]",
+                            "configurationFunction": "[variables('SQLDSCConfigurationFunction')]",
+                        },
+                        "protectedSettings": { }
+                    }
+                }
+            ]
+        }
+    ],
+    "outputs": {
+    }
+}
