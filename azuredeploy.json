@@ -255,7 +255,7 @@
                         "autoUpgradeMinorVersion": true,
                         "settings": {
                             "modulesUrl": "[parameters('WebDSCZip')]",
-                            "configurationFunction": "[variables('WebDSCConfigurationFunction')]",
+                            "configurationFunction": "[variables('WebDSCConfigurationFunction')]"
                          },
                         "protectedSettings": { }
                     }
@@ -384,7 +384,7 @@
                         "autoUpgradeMinorVersion": true,
                         "settings": {
                             "modulesUrl": "[parameters('SQLDSCZip')]",
-                            "configurationFunction": "[variables('SQLDSCConfigurationFunction')]",
+                            "configurationFunction": "[variables('SQLDSCConfigurationFunction')]"
                         },
                         "protectedSettings": { }
                     }
